@@ -1,0 +1,247 @@
+Jarvis AI: Kaise Chalta Hai, Implementation aur Use
+Sep 30, 2026 · @jayesh
+Overview
+Jarvis ek voice-first Flutter assistant hai: aap bolte ya likhte ho, wo command samajhta hai, kaam karta hai ya jawab sochta hai, aur phir bolkar sunata hai. Ab isme koi cloud API key nahi lagti, dimaag ek Ollama server par chalne wala Qwen2.5 3B model hai.
+Project do hisson me bantta hai: jarvis_core (poora assistant, ek Flutter package) aur demoapp (test app jo package ko call karta hai).
+Hissa
+Kaam
+Kis cheez se bana
+Kaan
+Aapki awaaz ko text banata hai
+speech_to_text
+Muh
+Jawab bolkar sunata hai
+flutter_tts
+Fast router
+Simple commands turant chalata hai, bina AI ke
+Rules (regex), FastCommandRouter
+Dimaag
+Baaki sab sawaalon ka jawab sochta hai
+Ollama server (OllamaBackend)
+Tools
+Asli kaam: time, timer, website kholna, search, aapke apne tools
+JarvisTool
+Wake word
+Hands-free mode me "Jarvis" sunkar jaagna
+Speech recognizer ka loop
+Files ka map
+Package D:\flutter\jarvis_core me har file ka ek hi kaam hai. Naya kaam add karna ho to pehle yahan dekhein ki kaunsi file badalni hai.
+File
+Kaam
+lib/jarvis_core.dart
+Entry point. Bahar se sirf ye ek import chahiye, baaki sab yahin se export hota hai.
+lib/src/jarvis.dart
+Jarvis class. Awaaz, dimaag aur tools ko jodta hai; app isi se baat karta hai.
+lib/src/config.dart
+JarvisConfig (saari settings) aur BrainMode (server ya on-device).
+lib/src/audio_engine.dart
+Mic se sunna aur speaker se bolna.
+lib/src/ai_brain.dart
+Baatcheet ki yaaddasht aur tool-calling loop.
+lib/src/llm/llm_backend.dart
+LlmBackend interface: koi bhi model yahan plug ho sakta hai.
+lib/src/llm/ollama_backend.dart
+Ollama server se HTTP par baat karta hai.
+lib/src/llm/local_provider.dart
+On-device model ke liye plug-in point (abhi khaali, jarvis_local se bharta hai).
+lib/src/tools/jarvis_tool.dart
+JarvisTool aur FunctionTool: apna tool banane ka base.
+lib/src/tools/builtin_tools.dart
+5 ready tools: time, date, website kholna, web search, timer.
+lib/src/tools/fast_command_router.dart
+Chhote commands ko AI ke bina turant pakadta hai.
+demoapp/lib/main.dart
+Test app ki screen, buttons aur orb animation.
+Andar ka logic
+Har command ek hi rasta leta hai: pehle fast router, na pakde to AI, aur AI chahe to tool bhi chalata hai.
+1. Fast router (FastCommandRouter). Sirf 9 shabd tak ke chhote vaakya dekhta hai. Agar "kitne baje", "youtube kholo", "5 minute ka timer" jaisa pattern mile to seedha tool chalata hai aur tool ka jawab hi bol deta hai. Isme model ka intezaar nahi hota, isliye jawab turant aata hai aur server band ho tab bhi chalta hai. Lambe vaakya (jaise "what time did WW2 start") router chhod deta hai taaki galat jawab na mile.
+2. AI brain (AIBrain). Router ne kuch na pakda to command yahan aata hai. Ye pichhli 6 baaton ki yaaddasht rakhta hai, system prompt ke saath (jo Hinglish me chhota jawab dene ko kehta hai) model ko bhejta hai, aur model ka text wapas leta hai.
+3. Tool calling. System prompt me har tool ka naam, kaam aur arguments likhe hote hain. Model ko kaha gaya hai ki tool chahiye to sirf ek JSON bheje, jaise {"tool": "set_timer", "args": {"seconds": 300}}. AIBrain is JSON ko pakadta hai, tool chalata hai, result model ko "Tool result: ..." ke roop me wapas deta hai, aur model user ke liye chhota jawab likhta hai. Ye loop zyada se zyada 3 baar chalta hai. Ye tareeka kisi bhi model ke saath chalta hai, kyunki isme model-specific format nahi hai.
+4. Hands-free loop. Switch on karne par Jarvis speech recognizer ko baar-baar sunne ke liye chalata rehta hai. Har baar jo suna use dekhta hai: "jarvis" (ya wakeWords ka koi shabd) mile to uske baad ka hissa command banta hai. Sirf "Jarvis" bola ho to wo "Ji sir?" bolkar agla vaakya sunta hai. Jab wo bol raha ho ya soch raha ho, loop rukta hai, taaki Jarvis apni hi awaaz na sun le.
+5. Brain kharab ho to. Server band ho ya model na mile, tab bhi app nahi girta. Fast commands phir bhi chalte hain, baaki par "dimaag se connect nahi ho pa raha" ka chhota sa jawab bolta hai, aur screen par asli wajah likhta hai.
+Setup
+AI jawab ke liye PC par Ollama chalna chahiye aur phone ko usse jodna hai. Time, timer, website waale fast commands iske bina bhi chalte hain.
+1. Model download (ek baar)
+ollama pull qwen2.5:3b
+Browser me http://localhost:11434 kholein. "Ollama is running" dikhna chahiye.
+2. Phone ko PC se jodna (USB tunnel)
+Phone USB se laga ho, tab PowerShell me:
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" reverse tcp:11434 tcp:11434
+Isse phone ka 127.0.0.1:11434 PC ke Ollama tak pahunch jata hai. Phone ya cable dobara lagane par ye command phir chalani padti hai. Phir main.dart ke top par:
+const String kServerUrlOverride = 'http://127.0.0.1:11434';
+Android emulator par ye override khali chhod dein; app khud 10.0.2.2 use karta hai.
+3. Android permissions
+File: demoapp/android/app/src/main/AndroidManifest.xml. <application se pehle:
+<uses-permission android:name="android.permission.INTERNET"/>
+<uses-permission android:name="android.permission.RECORD_AUDIO"/>
+<queries>
+  <intent><action android:name="android.speech.RecognitionService"/></intent>
+  <intent><action android:name="android.intent.action.TTS_SERVICE"/></intent>
+  <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="https"/></intent>
+</queries>
+Aur <application tag me android:usesCleartextTraffic="true" jodein, kyunki Android bina https ke http:// connection rok deta hai.
+4. App chalana
+demoapp folder me flutter pub get, phir flutter run. Manifest badalne ke baad hot restart kaafi nahi, app ko band karke dobara chalayein. main.dart ke const badalne par capital R (hot restart) chahiye.
+Use kaise karein
+App me sirf Jarvis banana hai, initialize() chalana hai, aur commands bhejne hain. Baaki sab package sambhalta hai.
+import 'package:jarvis_core/jarvis_core.dart';
+
+final jarvis = Jarvis(
+  config: JarvisConfig(
+    serverUrl: 'http://127.0.0.1:11434',
+    serverModel: 'qwen2.5:3b',
+  ),
+);
+
+await jarvis.initialize();            // mic, speaker aur brain taiyar
+if (!jarvis.brainReady) print(jarvis.brainError);
+
+// Text command
+await jarvis.processCommand('time kya hai', (reply) => print(reply));
+
+// Bolkar command (ek baar)
+await jarvis.listenAndRespond((reply) => print(reply),
+    onHeard: (words) => print('Suna: $words'));
+
+// Hands-free: "Jarvis, ..." bolne par jaagta hai
+await jarvis.startHandsFree(onReply: (r) => print(r));
+
+await jarvis.stopListening();         // sunna (aur hands-free) band
+await jarvis.stopSpeaking();          // bolna band
+Jarvis ke main methods
+Method / property
+Kaam
+initialize()
+Ek baar chalayein. Brain down ho tab bhi error nahi fenkta.
+processCommand(text, onReply)
+Command chalata hai, onReply ko jawab deta hai aur bolta bhi hai.
+listenAndRespond(onReply, onHeard:)
+Push-to-talk: ek baar sunta hai, phir command chalata hai.
+startHandsFree(...) / stopListening()
+Wake word mode shuru / band.
+state
+idle, listening, thinking, speaking. UI ko isse chalayein.
+brainReady, brainError, brainName
+Brain ki haalat.
+updateConfig(config), setBrainMode(mode)
+Chalte app me settings ya brain badalna.
+registerTool(tool)
+Chalte app me naya tool jodna.
+clearMemory()
+Baatcheet ki yaaddasht saaf.
+JarvisConfig ke options
+Option
+Default
+Matlab
+brainMode
+server
+server ya onDevice.
+serverUrl
+http://localhost:11434
+Ollama ka address.
+serverModel
+qwen2.5:3b
+Ollama model ka naam.
+languageCode
+en-IN
+Sunne aur bolne ki bhasha. Sirf Hindi ke liye hi-IN.
+wakeWords
+jarvis + spelling variants
+Hands-free jagane ke shabd.
+systemInstruction
+Hinglish, chhote jawab
+Jarvis ka swabhav. Yahan badal kar personality badal sakte hain.
+temperature
+0.6
+Kam = seedha jawab, zyada = rangeen jawab.
+maxReplyTokens
+300
+Jawab ki lambai ki seema.
+maxHistoryTurns
+6
+Kitni pichhli baatein yaad rahengi.
+enableFastCommands
+true
+False karne par sab kuch AI se guzrega.
+Apna tool kaise add karein
+Tool ek chhota sa kaam hai jo Jarvis chala sakta hai. AI ko sirf tool ka naam, description aur parameters dikhte hain, isliye description saaf English me likhein ki wo kya karta hai aur kab use hona chahiye.
+Sabse aasan: FunctionTool
+Jarvis(...) banate waqt tools: me daalein:
+final jarvis = Jarvis(
+  config: JarvisConfig(serverUrl: 'http://127.0.0.1:11434'),
+  tools: [
+    FunctionTool(
+      name: 'flashlight',
+      description: 'Turns the phone flashlight on or off.',
+      parameters: {'state': '"on" or "off"'},
+      run: (args) async {
+        final on = args['state'] == 'on';
+        // yahan apna asli code: torch plugin waghera
+        return on ? 'Torch on kar di, sir.' : 'Torch band kar di, sir.';
+      },
+    ),
+  ],
+);
+run jo text return karta hai wahi Jarvis bolta hai (fast path me) ya model ko result ke roop me milta hai (AI path me). Isliye jawab ek chhota, bolne layak Hinglish vaakya rakhein.
+Zyada control: JarvisTool class
+Jab tool ko apni state rakhni ho (jaise timer ke chalte timers), JarvisTool extend karein aur name, description, parameters, execute() likhein. Band hone par safai ke liye dispose() override karein.
+Tool ko turant pakadwana (optional)
+AI 3B model kabhi tool ka call chhod bhi deta hai. Bahut zaroori commands ke liye fast_command_router.dart me ek if add karein, jaise if (t.contains('torch')) return tools['flashlight']!.execute({'state': 'on'});. Tab wo AI ke bina bhi chalega.
+Chalte app me jodne ke liye jarvis.registerTool(tool) bhi kaam karta hai. Same naam ka tool built-in ko replace kar deta hai.
+On-device mode aur model badalna
+Abhi app server mode me chalta hai, aur On-device button band (grey) rehta hai. Wajah: on-device model llm_llamacpp package se chalta hai, jo build ke waqt ek native library download karta hai. Aapke Windows par unzip command nahi mila aur poora Android build toot gaya. Isliye ye hissa alag package jarvis_local me rakha gaya hai, aur jarvis_core me koi native dependency nahi hai.
+Baad me on-device jodne ke steps:
+1. Windows par unzip install karein (jaise choco install unzip ya scoop install unzip), phir naya terminal kholein.
+2. jarvis_local folder ko jarvis_core ke bagal me rakhein aur demoapp/pubspec.yaml me jarvis_local ko path dependency ke roop me jodein.
+3. Jarvis(...) me localProvider: const LlamaLocalProvider() daalein.
+4. App me On-device chunkar "Download model" dabayein (lagbhag 2 GB, Wi-Fi par).
+On-device Web par nahi chalta, wahan sirf server mode hai.
+Server ka model badalna bas ek line hai: pehle ollama pull <naam>, phir JarvisConfig(serverModel: '<naam>'). Chhote phone ya kam RAM par qwen2.5:1.5b, behtar jawab ke liye PC par qwen2.5:7b try kar sakte hain. Model jitna bada, jawab utna achha, lekin utna dheera aur bhaari.
+Troubleshooting
+Screen par Jarvis ke jawab ke andar bracket me asli wajah likhi aati hai. Wahi se shuru karein.
+Kya dikha
+Wajah
+Fix
+"Server (...) se kuch jawab nahi aaya"
+Phone Ollama tak nahi pahunch pa raha. 10.0.2.2 sirf emulator par chalta hai.
+USB tunnel command chalayein aur kServerUrlOverride set karein (Setup dekhein). Ollama chal raha ho.
+"Model ... server par nahi mila"
+Model pull nahi hua.
+ollama pull qwen2.5:3b
+"Cleartext HTTP traffic not permitted"
+Android http:// rokta hai.
+Manifest me usesCleartextTraffic="true"
+"Speech recognition available nahi hai"
+Mic permission ya speech service nahi mili.
+Manifest me RECORD_AUDIO aur <queries>, phone Settings me app ko mic permission dein.
+"Kuch sunai nahi diya"
+Bolne se pehle recognition band ho gayi.
+Button dabate hi bolna shuru karein, shant jagah par try karein.
+Hands-free me "Jarvis" pakad nahi hota
+Recognizer ne naam alag likha.
+wakeWords me wo spelling jodein. Speak dabakar "Jarvis" bolein, "You:" me wahi dikhta hai.
+Hindi jawab galat/ ajeeb bolta hai
+TTS Roman Hinglish ko English jaise padhta hai.
+languageCode badal kar dekhein, ya phone ke TTS settings me Hindi voice install karein.
+Pehla jawab bahut dheera (10-30 sec)
+Model pehli baar memory me load ho raha hai.
+Normal hai. Baad ke jawab tez aate hain (model 30 min tak loaded rehta hai).
+Build me llm_llamacpp / unzip error
+On-device package build me aa gaya.
+jarvis_core me sirf flutter_tts, speech_to_text, http, url_launcher hone chahiye.
+Har baar purane errors
+Purani copy ka cache.
+flutter clean phir flutter pub get.
+Limits aur aage ke improvements
+Jarvis abhi kaam karne wala pehla version hai. Ye baatein jaan lein:
+• Hands-free OS ka speech recognizer loop me chalata hai, isliye battery zyada lagti hai aur kuch Android phones par har restart par halki beep aa sakti hai.
+• 3B model kabhi tool call chhod deta hai ya galat jawab deta hai. Zaroori commands ko fast router me daalna sabse pakka tareeka hai.
+• Timer app ke andar chalta hai. App band hone par timer nahi bajta, ye system alarm nahi hai.
+• Jawab tab aata hai jab poora ban jaye, streaming nahi hai. Lambe jawab me thoda intezaar lagta hai.
+• Timer waale fast command sirf ankon (5 minute) samajhte hain, "paanch minute" nahi.
+Aage kya ho sakta hai:
+1. Streaming: jawab ka pehla vaakya bante hi bolna shuru, taaki intezaar kam ho.
+2. Behtar wake word engine (jaise Porcupine): kam battery, koi beep nahi.
+3. Zyada tools: call karna, SMS, torch, alarm, notes.
+4. Setting screen: server URL aur model app ke andar se badalna, taaki code na badalna pade.
+5. On-device mode ko unzip fix ke baad jodkar internet ke bina chalana.
